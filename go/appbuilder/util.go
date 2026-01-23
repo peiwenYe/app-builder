@@ -16,6 +16,7 @@ package appbuilder
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -30,42 +31,40 @@ type SSEEvent struct {
 }
 
 func checkHTTPResponse(rsp *http.Response) (string, error) {
-    requestID := rsp.Header.Get("X-Appbuilder-Request-Id")
-    if rsp.StatusCode == http.StatusOK {
-        log.Printf("Successful HTTP response. RequestID: %s", requestID)
-        return requestID, nil
-    }
+	requestID := rsp.Header.Get("X-Appbuilder-Request-Id")
+	if rsp.StatusCode == http.StatusOK {
+		log.Printf("Successful HTTP response. RequestID: %s", requestID)
+		return requestID, nil
+	}
 
-    data, err := io.ReadAll(rsp.Body)
-    if err != nil {
-        log.Printf("Failed to read response body. RequestID: %s, Error: %v", requestID, err)
-        return requestID, err
-    }
-    log.Printf("HTTP response with unexpected status code. RequestID: %s, StatusCode: %d, Content: %s", requestID, rsp.StatusCode, string(data))
-    return requestID, fmt.Errorf("http status code is %d, content is %s", rsp.StatusCode, string(data))
+	data, err := io.ReadAll(rsp.Body)
+	if err != nil {
+		log.Printf("Failed to read response body. RequestID: %s, Error: %v", requestID, err)
+		return requestID, err
+	}
+	log.Printf("HTTP response with unexpected status code. RequestID: %s, StatusCode: %d, Content: %s", requestID, rsp.StatusCode, string(data))
+	return requestID, fmt.Errorf("http status code is %d, content is %s", rsp.StatusCode, string(data))
 }
 
 func NewSSEReader(bufSize int, reader *bufio.Reader) *sseReader {
-	buf := make([]byte, bufSize)
-	return &sseReader{reader: reader, buf: buf}
+	//buf := make([]byte, bufSize)
+	return &sseReader{reader: reader, buf: bytes.Buffer{}}
 }
 
 type sseReader struct {
 	reader *bufio.Reader
-	buf    []byte
+	buf    bytes.Buffer
 }
 
 func (t *sseReader) ReadMessageLine() ([]byte, error) {
-	size := 0
+	t.buf.Reset()
 	for {
 		line, isPrefix, err := t.reader.ReadLine()
 		if err != nil {
 			return nil, err
 		}
-		if len(line)+size > cap(t.buf) {
-			panic("buffer overflow")
-		}
-		size += copy(t.buf[size:], line)
+		t.buf.Grow(len(line))
+		t.buf.Write(line)
 		if !isPrefix {
 			break
 		}
@@ -73,8 +72,8 @@ func (t *sseReader) ReadMessageLine() ([]byte, error) {
 	// 读取空行
 	line, _, err := t.reader.ReadLine()
 	if err != nil || len(line) != 0 {
-		size += copy(t.buf[size:], line)
-		return nil, errors.New(string(t.buf[0:size]))
+		t.buf.Grow(len(line))
+		return nil, errors.New(t.buf.String())
 	}
-	return t.buf[0:size], nil
+	return t.buf.Bytes(), nil
 }

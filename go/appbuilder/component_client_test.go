@@ -98,7 +98,7 @@ func TestComponentClientHeader(t *testing.T) {
 
 	componentID := "c-wf-a39ee06c-808f-4a19-9f5f-544044283749"
 	parameters := map[string]any{
-		SysOriginQuery: "梦到巨人，是怎么回事",
+		SysOriginQuery: "梦到巨人，是怎么回事，请仔细分析，写一篇不少于1000字的文章",
 	}
 	componentClient, err := NewComponentClient(config)
 	if err != nil {
