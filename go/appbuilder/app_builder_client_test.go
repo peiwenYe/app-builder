@@ -989,7 +989,7 @@ func TestAppBuilderClientRunCustomMetadata(t *testing.T) {
 	res, err := client.Run(AppBuilderClientRunRequest{
 		AppID:          appID,
 		Query:          "我要回老家相亲",
-		Stream:         false,
+		Stream:         true,
 		ConversationID: conversationID,
 		CustomMetadata: &CustomMetadata{
 			OverrideRoleInstruction: `# 角色任务\n" +
@@ -1002,7 +1002,7 @@ func TestAppBuilderClientRunCustomMetadata(t *testing.T) {
                 "# 要求与限制\n" +
                 "\n" +
                 "1. 输出内容的风格为幽默\n" +
-                "2.输出的字数限制为100字以内"`,
+                "2.输出的字数限制为1000字范围"`,
 		},
 	})
 	if err != nil {
