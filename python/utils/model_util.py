@@ -303,8 +303,8 @@ class BaseModelInfo(BaseModel):
     maxContextTokens: Optional[int] = None
     maxInputTokens: Optional[int] = None
     maxOutputTokens: Optional[int] = None
-    reasoningModel: bool = Field()
-    supportsSearch: bool = Field()
+    reasoningModel: Optional[bool] = Field()
+    supportsSearch: Optional[bool] = Field()
 
 
 class CommonModelV2(BaseModelInfo, extra='allow'):
