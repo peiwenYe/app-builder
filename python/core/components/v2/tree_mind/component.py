@@ -81,9 +81,12 @@ class TreeMind(Component):
         data = response.text
         treemind_dict = json.loads(data.split("data:")[-1])
         treemind_response = TreeMindResponse(**treemind_dict)
-        jump_link = treemind_response.info.downloadInfo.fileInfo.jumpLink
-        img_link = treemind_response.info.downloadInfo.fileInfo.pic
-        return img_link, jump_link
+        if treemind_response.errCode == '0':
+            jump_link = treemind_response.info.downloadInfo.fileInfo.jumpLink
+            img_link = treemind_response.info.downloadInfo.fileInfo.pic
+            return img_link, jump_link, None
+        else:
+            return None, None, treemind_response.errMsg
 
     @components_run_stream_trace
     def tool_eval(
@@ -98,44 +101,54 @@ class TreeMind(Component):
             dict: 返回生成的思维导图的图片链接和跳转链接
         """
 
-        img_link, jump_link = self._post(query, **kwargs)
+        img_link, jump_link, errMsg = self._post(query, **kwargs)
+        if not errMsg:
+            inst = "你必须遵循指令，输出无需总结，只需要将，“原样输出内容”对应的内容原样输出即可：\n"
+            img_res = f"原样输出内容：![图片url]({img_link})\n"
+            jump_res = f"{query}的思维导图已经为您生成好了，您可以通过这个链接编辑：编辑链接：{jump_link}。"
+            end_talk = "如果您觉得这个思维导图还不够完美，或者您的想法需要更自由地表达，点击编辑按钮，对思维导图变形、变色、变内容、甚至可以添加新的元素，快来试试吧！"
+            result = inst + img_res + jump_res + end_talk
 
-        inst = "你必须遵循指令，输出无需总结，只需要将，“原样输出内容”对应的内容原样输出即可：\n"
-        img_res = f"原样输出内容：![图片url]({img_link})\n"
-        jump_res = f"{query}的思维导图已经为您生成好了，您可以通过这个链接编辑：编辑链接：{jump_link}。"
-        end_talk = "如果您觉得这个思维导图还不够完美，或者您的想法需要更自由地表达，点击编辑按钮，对思维导图变形、变色、变内容、甚至可以添加新的元素，快来试试吧！"
-        result = inst + img_res + jump_res + end_talk
+            llm_result = self.create_output(
+                type="text",
+                text=result,
+                visible_scope='llm',
+                name="text",
+                raw_data={"event_status": "done"}
+            )
+            yield llm_result
+            
+            img_link_result = self.create_output(
+                type="image",
+                text={
+                    "filename": get_filename_from_url(img_link),
+                    "url": img_link
+                },
+                visible_scope='all',
+                name="img_link_url",
+                raw_data={"event_status": "done"}
+            )
+            yield img_link_result
 
-        llm_result = self.create_output(
-            type="text",
-            text=result,
-            visible_scope='llm',
-            name="text",
-            raw_data={"event_status": "done"}
-        )
-        yield llm_result
-        
-        img_link_result = self.create_output(
-            type="image",
-            text={
-                "filename": get_filename_from_url(img_link),
-                "url": img_link
-            },
-            visible_scope='all',
-            name="img_link_url",
-            raw_data={"event_status": "done"}
-        )
-        yield img_link_result
-
-        jump_link_result = self.create_output(
-            type="urls",
-            text={
-                "url": jump_link
-            },
-            visible_scope='all',
-            name="jump_link_url"
-        )
-        yield jump_link_result
+            jump_link_result = self.create_output(
+                type="urls",
+                text={
+                    "url": jump_link
+                },
+                visible_scope='all',
+                name="jump_link_url"
+            )
+            yield jump_link_result
+        else:
+            result = "生成失败，" + errMsg
+            llm_result = self.create_output(
+                type="text",
+                text=result,
+                visible_scope='llm',
+                name="text",
+                raw_data={"event_status": "done"}
+            )
+            yield llm_result
 
 
     @HTTPClient.check_param
@@ -148,11 +161,14 @@ class TreeMind(Component):
             Message: 返回消息对象
         """
         query = message.content
-        img_link, jump_link = self._post(query, **kwargs)
+        img_link, jump_link, errMsg = self._post(query, **kwargs)
 
-        result = {
-            "result": "思维导图已经为您生成好了，您可以点击'img_link'对应的链接查看，如果您觉得这个思维导图还不够完美，或者您的想法需要更自由地表达，点击'edit_link'对应的链接，对思维导图变形、变色、变内容、甚至可以添加新的元素",
-            "img_link": img_link,
-            "edit_link": jump_link
-        }
-        return Message(content=result)
+        if not errMsg:
+            result = {
+                "result": "思维导图已经为您生成好了，您可以点击'img_link'对应的链接查看，如果您觉得这个思维导图还不够完美，或者您的想法需要更自由地表达，点击'edit_link'对应的链接，对思维导图变形、变色、变内容、甚至可以添加新的元素",
+                "img_link": img_link,
+                "edit_link": jump_link
+            }
+            return Message(content=result)
+        else:
+            return Message(content={"error": errMsg})
